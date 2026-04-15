@@ -37,7 +37,7 @@ ALLOWED_USERS = None if _raw_allowed == "*" else set(_raw_allowed)
 LONG_OUTPUT = _cfg["slack"].get("long_output", "chunk")  # "chunk" | "snippet"
 
 # SECURITY: allowlist of commands. Empty set = allow anything (DANGEROUS).
-ALLOWED_CMDS = {"uptime", "df", "free", "ps", "journalctl", "helix", "jk"}
+ALLOWED_CMDS = {"uptime", "df", "free", "ps", "journalctl", "helix", "jk", "help"}
 
 TIMEOUT_SEC = 30
 MAX_OUTPUT = 2900    # Slack attachment text field cap; leave headroom
@@ -146,6 +146,15 @@ def run_command(user: str, text: str, say, client) -> None:
     if ALLOWED_CMDS and argv[0] not in ALLOWED_CMDS:
         log.warning("user=%s blocked command not in allowlist: %s", user, argv[0])
         say(f"`{argv[0]}` not in allowlist")
+        return
+
+    if argv[0] == "help":
+        cmds = sorted(ALLOWED_CMDS - {"help"})
+        say(
+            "*Usage:* `@bot <command> [args]` or DM the bot directly.\n"
+            f"*Available commands:* {', '.join(f'`{c}`' for c in cmds)}\n"
+            f"*Timeout:* {TIMEOUT_SEC}s"
+        )
         return
 
     cmd_str = " ".join(argv)
