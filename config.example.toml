@@ -1,0 +1,6 @@
+# Copy to config.toml and fill in. Keep permissions tight: chmod 600 config.toml
+
+[slack]
+bot_token = "xoxb-REPLACE"
+app_token = "xapp-REPLACE"
+allowed_users = ["U0123456789"]   # Slack member IDs allowed to run commands
