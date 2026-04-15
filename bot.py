@@ -170,25 +170,26 @@ def run_command(user: str, text: str, say, client) -> None:
         )
         raw = re.sub(r"\x1b\[[0-9;]*[mABCDEFGHJKSTfhilmnprsu]", "", (result.stdout + result.stderr)[:MAX_CAPTURE]) or "(no output)"
         log.info("user=%s cmd=%r exit=%d output_len=%d", user, cmd_str, result.returncode, len(raw))
+        exit_str = "" if result.returncode == 0 else f"exit={result.returncode}"
         if len(raw) > MAX_OUTPUT:
             if LONG_OUTPUT == "snippet":
                 log.info("user=%s uploading output as file snippet (%d bytes)", user, len(raw))
                 client.chat_update(
                     channel=ack["channel"], ts=ack["ts"],
-                    text=f"exit={result.returncode} — uploading output as file…",
+                    text=f"{exit_str + ' — ' if exit_str else ''}uploading output as file…",
                 )
                 client.files_upload_v2(
                     channel=ack["channel"],
                     content=raw,
                     filename="output.txt",
-                    initial_comment=f"`{cmd_str}` → exit={result.returncode}",
+                    initial_comment=f"`{cmd_str}`{' → ' + exit_str if exit_str else ''}",
                 )
             else:  # chunk
                 chunks = _split_chunks(raw, MAX_OUTPUT)
                 log.info("user=%s sending output in %d chunks", user, len(chunks))
                 client.chat_update(
                     channel=ack["channel"], ts=ack["ts"],
-                    text=f"`{cmd_str}` → exit={result.returncode} ({len(chunks)} parts)",
+                    text=f"`{cmd_str}` — {len(chunks)} parts{' — ' + exit_str if exit_str else ''}",
                 )
                 for chunk in chunks:
                     client.chat_postMessage(
@@ -199,7 +200,7 @@ def run_command(user: str, text: str, say, client) -> None:
         if argv[0] == "jk":
             kwargs = _render_jk(raw, result.returncode)
         else:
-            kwargs = {"text": f"exit={result.returncode}\n```{raw}```"}
+            kwargs = {"text": f"{exit_str + chr(10) if exit_str else ''}```{raw}```"}
     except subprocess.TimeoutExpired:
         log.warning("user=%s cmd=%r timed out after %ds", user, cmd_str, TIMEOUT_SEC)
         kwargs = {"text": f"timed out after {TIMEOUT_SEC}s"}
