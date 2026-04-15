@@ -6,14 +6,24 @@ Usage in Slack:  DM the bot:      uptime
 
 Server needs only OUTBOUND access to slack.com (no inbound port, no public URL).
 """
+import logging
 import re
 import shlex
 import subprocess
+import sys
 
 from slack_bolt import App
 from slack_bolt.adapter.socket_mode import SocketModeHandler
 
 import config
+
+logging.basicConfig(
+    stream=sys.stdout,
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(message)s",
+    datefmt="%Y-%m-%dT%H:%M:%S",
+)
+log = logging.getLogger(__name__)
 
 _cfg = config.load()
 BOT_TOKEN = _cfg["slack"]["bot_token"]   # xoxb-...
@@ -120,22 +130,27 @@ def _split_chunks(text: str, size: int) -> list[str]:
 
 def run_command(user: str, text: str, say, client) -> None:
     if ALLOWED_USERS is not None and user not in ALLOWED_USERS:
+        log.warning("unauthorized user=%s attempted: %s", user, text)
         say(f"<@{user}> not authorized.")
         return
 
     try:
         argv = shlex.split(text)
     except ValueError as e:
+        log.warning("user=%s parse error: %s", user, e)
         say(f"parse error: {e}")
         return
     if not argv:
         say("empty command")
         return
     if ALLOWED_CMDS and argv[0] not in ALLOWED_CMDS:
+        log.warning("user=%s blocked command not in allowlist: %s", user, argv[0])
         say(f"`{argv[0]}` not in allowlist")
         return
 
-    ack = say(f"Running `{' '.join(argv)}`…")
+    cmd_str = " ".join(argv)
+    log.info("user=%s running: %s", user, cmd_str)
+    ack = say(f"Running `{cmd_str}`…")
 
     try:
         result = subprocess.run(
@@ -145,9 +160,10 @@ def run_command(user: str, text: str, say, client) -> None:
             timeout=TIMEOUT_SEC,
         )
         raw = (result.stdout + result.stderr)[:MAX_CAPTURE] or "(no output)"
+        log.info("user=%s cmd=%r exit=%d output_len=%d", user, cmd_str, result.returncode, len(raw))
         if len(raw) > MAX_OUTPUT:
-            cmd_str = " ".join(argv)
             if LONG_OUTPUT == "snippet":
+                log.info("user=%s uploading output as file snippet (%d bytes)", user, len(raw))
                 client.chat_update(
                     channel=ack["channel"], ts=ack["ts"],
                     text=f"exit={result.returncode} — uploading output as file…",
@@ -160,6 +176,7 @@ def run_command(user: str, text: str, say, client) -> None:
                 )
             else:  # chunk
                 chunks = _split_chunks(raw, MAX_OUTPUT)
+                log.info("user=%s sending output in %d chunks", user, len(chunks))
                 client.chat_update(
                     channel=ack["channel"], ts=ack["ts"],
                     text=f"`{cmd_str}` → exit={result.returncode} ({len(chunks)} parts)",
@@ -175,6 +192,7 @@ def run_command(user: str, text: str, say, client) -> None:
         else:
             kwargs = {"text": f"exit={result.returncode}\n```{raw}```"}
     except subprocess.TimeoutExpired:
+        log.warning("user=%s cmd=%r timed out after %ds", user, cmd_str, TIMEOUT_SEC)
         kwargs = {"text": f"timed out after {TIMEOUT_SEC}s"}
 
     client.chat_update(channel=ack["channel"], ts=ack["ts"], **kwargs)
@@ -200,4 +218,8 @@ def handle_dm(event, say, client):
 
 
 if __name__ == "__main__":
+    log.info("bot starting (long_output=%s, allowed_users=%s, allowed_cmds=%s)",
+             LONG_OUTPUT,
+             "any" if ALLOWED_USERS is None else len(ALLOWED_USERS),
+             list(ALLOWED_CMDS) if ALLOWED_CMDS else "unrestricted")
     SocketModeHandler(app, APP_TOKEN).start()
