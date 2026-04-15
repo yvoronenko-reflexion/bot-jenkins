@@ -134,6 +134,11 @@ def run_command(user: str, text: str, say, client) -> None:
         say(f"<@{user}> not authorized.")
         return
 
+    # Slack converts straight quotes to Unicode smart quotes; normalize them
+    # back so shlex can parse quoted arguments (e.g. "treatment plan").
+    text = text.replace("\u201c", '"').replace("\u201d", '"') \
+               .replace("\u2018", "'").replace("\u2019", "'")
+
     try:
         argv = shlex.split(text)
     except ValueError as e:
