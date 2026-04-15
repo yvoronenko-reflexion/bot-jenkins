@@ -102,6 +102,22 @@ def _render_jk(output: str, returncode: int) -> dict:
     return {"text": title or "jk output", "attachments": [attachment]}
 
 
+def _split_chunks(text: str, size: int) -> list[str]:
+    """Split *text* into chunks of at most *size* chars, breaking on newlines."""
+    chunks = []
+    while len(text) > size:
+        cut = text.rfind("\n", 0, size)
+        if cut == -1:
+            cut = size  # no newline in window — fall back to hard cut
+        else:
+            cut += 1    # include the newline in the preceding chunk
+        chunks.append(text[:cut])
+        text = text[cut:]
+    if text:
+        chunks.append(text)
+    return chunks
+
+
 def run_command(user: str, text: str, say, client) -> None:
     if ALLOWED_USERS is not None and user not in ALLOWED_USERS:
         say(f"<@{user}> not authorized.")
@@ -143,7 +159,7 @@ def run_command(user: str, text: str, say, client) -> None:
                     initial_comment=f"`{cmd_str}` → exit={result.returncode}",
                 )
             else:  # chunk
-                chunks = [raw[i:i + MAX_OUTPUT] for i in range(0, len(raw), MAX_OUTPUT)]
+                chunks = _split_chunks(raw, MAX_OUTPUT)
                 client.chat_update(
                     channel=ack["channel"], ts=ack["ts"],
                     text=f"`{cmd_str}` → exit={result.returncode} ({len(chunks)} parts)",
