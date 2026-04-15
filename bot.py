@@ -28,7 +28,8 @@ ALLOWED_USERS = None if _raw_allowed == "*" else set(_raw_allowed)
 ALLOWED_CMDS = {"uptime", "df", "free", "ps", "journalctl", "helix", "jk"}
 
 TIMEOUT_SEC = 30
-MAX_OUTPUT = 8000  # Slack message cap is ~40k; leave headroom
+MAX_OUTPUT = 2900    # Slack attachment text field cap; leave headroom
+MAX_CAPTURE = 200_000  # safety cap on subprocess output to avoid OOM
 
 app = App(token=BOT_TOKEN)
 
@@ -125,11 +126,23 @@ def run_command(user: str, text: str, say, client) -> None:
             text=True,
             timeout=TIMEOUT_SEC,
         )
-        output = (result.stdout + result.stderr)[:MAX_OUTPUT] or "(no output)"
+        raw = (result.stdout + result.stderr)[:MAX_CAPTURE] or "(no output)"
+        if len(raw) > MAX_OUTPUT:
+            client.chat_update(
+                channel=ack["channel"], ts=ack["ts"],
+                text=f"exit={result.returncode} — output too long, uploading as file…",
+            )
+            client.files_upload_v2(
+                channel=ack["channel"],
+                content=raw,
+                filename="output.txt",
+                initial_comment=f"`{' '.join(argv)}` → exit={result.returncode}",
+            )
+            return
         if argv[0] == "jk":
-            kwargs = _render_jk(output, result.returncode)
+            kwargs = _render_jk(raw, result.returncode)
         else:
-            kwargs = {"text": f"exit={result.returncode}\n```{output}```"}
+            kwargs = {"text": f"exit={result.returncode}\n```{raw}```"}
     except subprocess.TimeoutExpired:
         kwargs = {"text": f"timed out after {TIMEOUT_SEC}s"}
 
