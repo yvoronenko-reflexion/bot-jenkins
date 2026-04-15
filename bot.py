@@ -24,6 +24,8 @@ APP_TOKEN = _cfg["slack"]["app_token"]   # xapp-... (Socket Mode token)
 _raw_allowed = _cfg["slack"].get("allowed_users", [])
 ALLOWED_USERS = None if _raw_allowed == "*" else set(_raw_allowed)
 
+LONG_OUTPUT = _cfg["slack"].get("long_output", "chunk")  # "chunk" | "snippet"
+
 # SECURITY: allowlist of commands. Empty set = allow anything (DANGEROUS).
 ALLOWED_CMDS = {"uptime", "df", "free", "ps", "journalctl", "helix", "jk"}
 
@@ -128,16 +130,29 @@ def run_command(user: str, text: str, say, client) -> None:
         )
         raw = (result.stdout + result.stderr)[:MAX_CAPTURE] or "(no output)"
         if len(raw) > MAX_OUTPUT:
-            client.chat_update(
-                channel=ack["channel"], ts=ack["ts"],
-                text=f"exit={result.returncode} — output too long, uploading as file…",
-            )
-            client.files_upload_v2(
-                channel=ack["channel"],
-                content=raw,
-                filename="output.txt",
-                initial_comment=f"`{' '.join(argv)}` → exit={result.returncode}",
-            )
+            cmd_str = " ".join(argv)
+            if LONG_OUTPUT == "snippet":
+                client.chat_update(
+                    channel=ack["channel"], ts=ack["ts"],
+                    text=f"exit={result.returncode} — uploading output as file…",
+                )
+                client.files_upload_v2(
+                    channel=ack["channel"],
+                    content=raw,
+                    filename="output.txt",
+                    initial_comment=f"`{cmd_str}` → exit={result.returncode}",
+                )
+            else:  # chunk
+                chunks = [raw[i:i + MAX_OUTPUT] for i in range(0, len(raw), MAX_OUTPUT)]
+                client.chat_update(
+                    channel=ack["channel"], ts=ack["ts"],
+                    text=f"`{cmd_str}` → exit={result.returncode} ({len(chunks)} parts)",
+                )
+                for chunk in chunks:
+                    client.chat_postMessage(
+                        channel=ack["channel"],
+                        text=f"```{chunk}```",
+                    )
             return
         if argv[0] == "jk":
             kwargs = _render_jk(raw, result.returncode)

@@ -4,3 +4,8 @@
 bot_token = "xoxb-REPLACE"
 app_token = "xapp-REPLACE"
 allowed_users = ["U0123456789"]   # Slack member IDs allowed to run commands
+
+# How to handle command output that exceeds MAX_OUTPUT characters.
+# "chunk"   — split into multiple chat messages (requires only chat:write)
+# "snippet" — upload as a file/snippet (requires files:write scope)
+long_output = "chunk"
