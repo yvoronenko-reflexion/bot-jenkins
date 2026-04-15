@@ -168,7 +168,7 @@ def run_command(user: str, text: str, say, client) -> None:
             text=True,
             timeout=TIMEOUT_SEC,
         )
-        raw = (result.stdout + result.stderr)[:MAX_CAPTURE] or "(no output)"
+        raw = re.sub(r"\x1b\[[0-9;]*[mABCDEFGHJKSTfhilmnprsu]", "", (result.stdout + result.stderr)[:MAX_CAPTURE]) or "(no output)"
         log.info("user=%s cmd=%r exit=%d output_len=%d", user, cmd_str, result.returncode, len(raw))
         if len(raw) > MAX_OUTPUT:
             if LONG_OUTPUT == "snippet":
