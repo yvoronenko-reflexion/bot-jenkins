@@ -148,6 +148,7 @@ def run_command(user: str, text: str, say, client) -> None:
     if not argv:
         say("empty command")
         return
+    argv[0] = argv[0].lower()
     if ALLOWED_CMDS and argv[0] not in ALLOWED_CMDS:
         log.warning("user=%s blocked command not in allowlist: %s", user, argv[0])
         say(f"`{argv[0]}` not in allowlist")
