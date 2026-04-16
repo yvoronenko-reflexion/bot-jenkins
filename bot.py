@@ -184,10 +184,11 @@ def run_command(user: str, text: str, say, client) -> None:
                     channel=ack["channel"], ts=ack["ts"],
                     text=f"{exit_str + ' — ' if exit_str else ''}uploading output as file…",
                 )
+                safe_name = re.sub(r"[^\w\-.]", "_", cmd_str)[:64].strip("_") or "output"
                 client.files_upload_v2(
                     channel=ack["channel"],
                     content=raw,
-                    filename="output.txt",
+                    filename=f"{safe_name}.txt",
                     initial_comment=f"`{cmd_str}`{' → ' + exit_str if exit_str else ''}",
                 )
             else:  # chunk
